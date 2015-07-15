@@ -1,0 +1,1 @@
+An example shows how to intersect two SpatialPolygonsDataFrame object.
