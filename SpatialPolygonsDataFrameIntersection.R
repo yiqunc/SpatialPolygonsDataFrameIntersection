@@ -31,17 +31,17 @@ library("ggplot2")
 library("ggmap")
 
 
-setwd("C:\\Users\\chen1\\uniprojects\\2015\\Teaching\\GEOM90007\\practicals\\04-MWR")
+setwd("C:\\Users\\chen1\\SourceCodeRepos\\SpatialPolygonsDataFrameIntersection")
 
 #intersection sample
 
 #this is the to-be-clipped layer
-lgas = readOGR(dsn="melb\\lga.shp", layer="lga")
+lgas = readOGR(dsn="melb", layer="lga")
 
 #this is the mask layer 
-sa4 = readOGR(dsn="melb\\sa4.shp", layer="sa4")
+sa4 = readOGR(dsn="melb", layer="sa4")
 
-plot(lgas)
+#plot(lgas)
 
 #make a copy 
 lgas2 = lgas
@@ -50,7 +50,7 @@ lgas2 = lgas
 sp_sa4 = SpatialPolygons(sa4@polygons[1], proj4string=sa4@proj4string)
 
 #loop for each polygon in the to-be-clipped layer
-for(i in 1:nrow(lgas@data)){
+for(i in nrow(lgas@data):1){
   print(lgas@data$LGA_NAME11[i])
   
   #get the to-be-clipped polygon ready
@@ -59,14 +59,41 @@ for(i in 1:nrow(lgas@data)){
   #do the intersecton
   intsectedGeom = gIntersection(sp_lga, sp_sa4)
   
-  #check if intersection is actually happening or not, 
-  #if slot 'polyobj' does not exist, it means the polygon is actually clipped.
+  #if intersection does not happen, remove the not-intersected lga 
+  if(is.null(intsectedGeom) == TRUE){
+    print("== remove not-intersected target from the output")
+    lgas2@data <- lgas2@data[-c(i), ]
+    lgas2@polygons[[i]] <- NULL
+    next
+  }
+  
+  #if slot 'polyobj' of the intersected geometry does not exist, 
+  #it means the polygon is successfully clipped, we replace the original polygon with the new clipped one in the copy 
   if("polyobj" %in% slotNames(intsectedGeom) == FALSE){
-    #replace the original polygon with the new clipped one in the copy 
     lgas2@polygons[i] = intsectedGeom@polygons
   }
-  #otherwise, just keep the original polygon untouched.
+  else #if the intersction is not properly handled (such polygon with sliver lines), we need to do a bit more effort to find the biggest chunk of clipped area and use that as ouput 
+  {
+    #find the biggest clipped area
+    biggestIdx=0
+    biggestArea = -1
+    for (k in 1: length(intsectedGeom@polyobj@polygons))
+    {
+      if(intsectedGeom@polyobj@polygons[[k]]@area > biggestArea){
+        biggestArea = intsectedGeom@polyobj@polygons[[k]]@area
+        biggestIdx = k
+      }
+    }
+    lgas2@polygons[i] = intsectedGeom@polyobj@polygons[biggestIdx]
+  }
+
 }
+
+# if not-intersected geometry has been removed, make sure the plotOrder has the correct number of geometry
+if(length(lgas2@plotOrder)!=length(lgas2@polygons)){
+  lgas2@plotOrder <- c(1:length(lgas2@polygons))
+}
+
 # show the updated copy 
 plot(lgas2)
 
